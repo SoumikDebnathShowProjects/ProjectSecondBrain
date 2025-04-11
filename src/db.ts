@@ -7,12 +7,15 @@ const userSchema = new Schema({
     password: { type: String, required: true },
 });
 
-const contentSchema = new Schema({
+const contentSchema = new mongoose.Schema({
     type: { type: String, required: true },
-    link: { type: String, required: true },
-    title: { type: String},
-    tags: [{ type: mongoose.Types.ObjectId,ref:'Tag' }],
-    userId: { type: mongoose.Types.ObjectId,ref:'User',required: true }
+    link: { type: String },
+    title: { type: String, required: true },
+    content: { type: Array, default: [] },
+    tags: { type: Array, default: [] },
+    hasImage: { type: Boolean, default: false },
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    date: { type: Date, default: Date.now }
 });
 const LinkSchema = new Schema({
     hash:String,

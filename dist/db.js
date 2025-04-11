@@ -11,12 +11,15 @@ const userSchema = new mongoose_2.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
 });
-const contentSchema = new mongoose_2.Schema({
+const contentSchema = new mongoose_1.default.Schema({
     type: { type: String, required: true },
-    link: { type: String, required: true },
-    title: { type: String },
-    tags: [{ type: mongoose_1.default.Types.ObjectId, ref: 'Tag' }],
-    userId: { type: mongoose_1.default.Types.ObjectId, ref: 'User', required: true }
+    link: { type: String },
+    title: { type: String, required: true },
+    content: { type: Array, default: [] },
+    tags: { type: Array, default: [] },
+    hasImage: { type: Boolean, default: false },
+    userId: { type: mongoose_1.default.Schema.Types.ObjectId, required: true },
+    date: { type: Date, default: Date.now }
 });
 const LinkSchema = new mongoose_2.Schema({
     hash: String,

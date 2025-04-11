@@ -5,22 +5,31 @@ import dotenv from 'dotenv';
 import { Content, LinkShare, User } from "./db";
 import { UserMiddleWare } from "./middleware";
 import { random } from "./utils";
-import { hash } from "bcrypt";
+// Use bcryptjs instead
+import bcrypt from 'bcryptjs';
+ // ✅ Uncomment this line
+
 import cors from "cors";
+
+
 dotenv.config();
 const JWT_SECRET="1df2nff2f"
 const app = express();
-app.use(express.json());
-app.use(cors())
 
+app.use(express.json({ strict: false }));
+
+
+app.use(cors())
+app.use(express.json());
 // Signup Route
 app.post('/api/v1/signup', async (req,res) => {
     const username =req.body.username;
     const password=req.body.password;
+    const hashedPassword=await bcrypt.hash(password,10);
     try{
         await User.create({
             username:username,
-            password:password
+            password:hashedPassword
         })
         res.json({message:"You are Signed up"});
     }catch(e){
@@ -31,67 +40,97 @@ app.post('/api/v1/signup', async (req,res) => {
     }
 });
 // Signin Route
-app.post('/api/v1/signin', async (req,res) => {
-    const username =req.body.username;
-    const password=req.body.password;
+app.post('/api/v1/signin', async (req, res) => {
+    const { username, password } = req.body;
+
     try {
-        const existingUser = await User.findOne({ username,password });
-         if(existingUser){
-            const token = jwt.sign({ id:existingUser._id},JWT_SECRET );
-        res.status(200).json({ message: "Signed in successfully", token });
-         }else{
-            res.status(403).json({ message: "Invalid username or password." });
-         }
+        const user = await User.findOne({ username });
+
+        if (!user) {
+           res.status(403).json({ message: "Invalid username or password." });
+           return;
+        }
+
+        // ✅ Compare password with the hashed password
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (passwordMatch) {
+            const token = jwt.sign({ id: user._id }, JWT_SECRET);
+            res.status(200).json({ message: "Signed in successfully", token });
+        } else {
+             res.status(403).json({ message: "Invalid username or password." });
+        }
     } catch (error: any) {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 });
+
 // Add new content
-app.post('/api/v1/content',UserMiddleWare, async (req, res) => {
+app.post('/api/v1/content', UserMiddleWare, async (req, res) => {
     try {
-        const { type, link } = req.body;
+        const { type, link, title, content, tags, hasImage } = req.body;
+
         const newContent = new Content({ 
             type, 
-            link,
-            tags:[],
+            link, 
+            title, 
+            content: content || [],
+            tags: tags || [], 
+            hasImage: hasImage || false,
             //@ts-ignore
-            userId:req.userId });
+            userId: req.userId,
+            date: new Date()
+        });
+
         await newContent.save();
-        res.status(200).json({ message: "Content added successfully" });
+        res.status(200).json({ message: "Content added successfully", content: newContent });
     } catch (error: any) {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 });
+
 // Fetch all content
 app.get('/api/v1/content',UserMiddleWare, async (req, res) => {
     try {
         //@ts-ignore
         const userId=req.userId;
         const content = await Content.find({userId}).populate("userId","username");
-        res.status(200).json({ content });
+        res.status(200).json(content); 
     } catch (error: any) {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 });
 // Delete content
-app.delete('/api/v1/content', UserMiddleWare, async (req, res) => {
+app.delete('/api/v1/content/:id', UserMiddleWare, async (req, res) => {
     try {
-        const contentId = req.body.contentId;
-     
-        await Content.deleteMany({
-            contentId,
-               //@ts-ignore
-        userId:req.userId
+        const contentId = req.params.id;
+        // @ts-ignore - Assuming userId is added by UserMiddleWare
+        const userId = req.userId; 
 
-        })
-        res.json({message:"The content is Deleted"})
+        const deletionResult = await Content.deleteOne({
+            _id: contentId,
+            userId: userId // Ensure user can only delete their own content
+        });
 
-        
+        if (deletionResult.deletedCount === 0) {
+            res.status(404).json({ 
+                message: "Content not found or you don't have permission to delete it" 
+            });
+        }
 
-        
+        res.json({ 
+            success: true,
+            message: "Content deleted successfully",
+            deletedId: contentId
+        });
 
     } catch (error: any) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        console.error('Delete content error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: "Server error while deleting content",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 // Create a shareable link
@@ -150,5 +189,6 @@ app.get('/api/v1/brain/:shareLink', async (req, res) => {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
